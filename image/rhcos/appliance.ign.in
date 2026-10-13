@@ -1,0 +1,23 @@
+{
+  "ignition": {"version": "3.4.0"},
+  "storage": {"files": []},
+  "systemd": {
+    "units": [
+      {
+        "name": "ega-payload-load.service",
+        "enabled": true,
+        "contents": "[Unit]\nDescription=Load verified local appliance images\nBefore=ega-frr.service ega-node-exporter.service\nRequiresMountsFor=/var/lib/ega/payload /var/lib/containers\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStartPre=/usr/sbin/restorecon -RF /var/lib/ega/payload\nExecStart=/usr/bin/bash /etc/ega/payload-load.sh\nTimeoutStartSec=0\n\n[Install]\nWantedBy=multi-user.target\n"
+      },
+      {
+        "name": "ega-frr.service",
+        "enabled": true,
+        "contents": "[Unit]\nDescription=FRR and FRR metrics in one local container\nRequires=ega-payload-load.service\nAfter=ega-payload-load.service network-online.target\nWants=network-online.target\nStartLimitIntervalSec=0\n\n[Service]\nEnvironmentFile=/etc/ega/images.env\nExecStartPre=-/usr/bin/podman rm --force ega-frr\nExecStart=/usr/bin/podman run --name ega-frr --rm --pull=never --network=host --privileged --volume=/etc/ega/frr.conf:/etc/frr/frr.conf:ro --volume=/etc/ega/frr-supervisor.sh:/etc/ega/frr-supervisor.sh:ro --entrypoint=/sbin/tini ${FRR_IMAGE_ID} -- /usr/bin/bash /etc/ega/frr-supervisor.sh\nExecStop=/usr/bin/podman stop --time=15 ega-frr\nRestart=always\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n"
+      },
+      {
+        "name": "ega-node-exporter.service",
+        "enabled": true,
+        "contents": "[Unit]\nDescription=Node exporter observing the RHCOS host\nRequires=ega-payload-load.service\nAfter=ega-payload-load.service\nStartLimitIntervalSec=0\n\n[Service]\nEnvironmentFile=/etc/ega/images.env\nExecStartPre=-/usr/bin/podman rm --force ega-node-exporter\nExecStart=/usr/bin/podman run --name ega-node-exporter --rm --pull=never --network=host --pid=host --security-opt=label=disable --volume=/:/host:ro,rslave --entrypoint=/bin/node_exporter ${NODE_EXPORTER_IMAGE_ID} --path.rootfs=/host --web.listen-address=127.0.0.1:9100\nExecStop=/usr/bin/podman stop --time=15 ega-node-exporter\nRestart=always\nRestartSec=5\nTimeoutStopSec=30\n\n[Install]\nWantedBy=multi-user.target\n"
+      }
+    ]
+  }
+}
