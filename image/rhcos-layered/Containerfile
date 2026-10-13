@@ -1,0 +1,6 @@
+ARG RHCOS_BASE
+FROM ${RHCOS_BASE}
+ARG EGA_VERSION
+LABEL org.opencontainers.image.version="${EGA_VERSION}"
+COPY rootfs/ /
+RUN bootc container lint
